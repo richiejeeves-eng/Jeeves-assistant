@@ -73,6 +73,10 @@ AS $function$
   LIMIT greatest(1, least(coalesce(max_results, 10), 20));
 $function$;
 
+-- Composite ownership references require a matching unique key.
+CREATE UNIQUE INDEX IF NOT EXISTS memories_id_user_id_uidx
+  ON public.memories (id, user_id);
+
 -- Explicit relationships between canonical memories; no duplicate content store.
 CREATE TABLE IF NOT EXISTS public.memory_links (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -90,10 +94,6 @@ CREATE TABLE IF NOT EXISTS public.memory_links (
     REFERENCES public.memories(id, user_id) ON DELETE CASCADE,
   CONSTRAINT memory_links_unique UNIQUE (user_id, from_memory_id, to_memory_id, relation)
 );
-
--- Composite ownership references require a matching unique key.
-CREATE UNIQUE INDEX IF NOT EXISTS memories_id_user_id_uidx
-  ON public.memories (id, user_id);
 
 CREATE INDEX IF NOT EXISTS memory_links_owner_created_idx
   ON public.memory_links (user_id, created_at DESC);
