@@ -332,7 +332,7 @@ Return a concise assessment with: reflection, relevant principles, ethical consi
 
     // The model proposes a durable candidate; deterministic safeguards and owner-scoped
     // deduplication run before saving. Unknown sensitivity always defaults to protected.
-    const secretLike = /(?:password|passphrase|api[_ -]?key|secret|bearer\\s+|access token|refresh token|credit card|\b\\d{3}-\\d{2}-\\d{4}\b)/i.test(memory);
+    const secretLike = /(?:password|passphrase|api[_ -]?key|secret|bearer\s+|access token|refresh token|credit card|\b\d{3}-\d{2}-\d{4}\b)/i.test(memory);
     if (secretLike) memory = "";
 
     let saved = "";
@@ -355,7 +355,7 @@ Return a concise assessment with: reflection, relevant principles, ethical consi
             importance: memoryImportance,
             status: "active",
             source: "conversation",
-            sensitive: memorySensitive,
+            sensitive: true, // Auto-captured content stays private until the user reviews it.
           }]);
           if (saveError) console.log("memory save failed");
           else saved = memory;
