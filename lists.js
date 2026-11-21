@@ -47,7 +47,23 @@ async function showMemories() {
     catch(error){addNote("Could not save memory: "+error.message);}
   });
   const refreshButton=makeButton("Refresh",refresh);
-  toolbar.append(search,filter,typeFilter,add,refreshButton); box.appendChild(toolbar);
+  const searchAll=makeButton("Search all",async()=>{
+    if(search.value.trim().length<2){addNote("Enter at least two characters to search.");return;}
+    try{
+      const result=await invoke("search",{query:search.value.trim(),limit:15});
+      list.textContent="";
+      count.textContent=(result.results||[]).length+" matching memories from secure full-text retrieval";
+      (result.results||[]).forEach(item=>{
+        const row=document.createElement("article");row.className="memory-row";
+        const details=document.createElement("div");details.className="memory-details";
+        const content=document.createElement("p");content.textContent=item.content;
+        const meta=document.createElement("small");meta.className="memory-date";meta.textContent="Matched by text relevance · "+(item.created_at?new Date(item.created_at).toLocaleDateString():"");
+        details.append(content,meta);row.append(details);list.appendChild(row);
+      });
+      if(!(result.results||[]).length){const empty=document.createElement("p");empty.textContent="No matching non-sensitive active memories found.";list.appendChild(empty);}
+    }catch(error){addNote("Search failed: "+error.message);}
+  });
+  toolbar.append(search,filter,typeFilter,searchAll,add,refreshButton); box.appendChild(toolbar);
   const count=document.createElement("p");count.className="memory-count";box.appendChild(count);
   const list=document.createElement("div");list.className="memory-list";box.appendChild(list);
 
@@ -76,7 +92,7 @@ async function showMemories() {
         actionButton(item.pinned?"Unpin":"Pin",()=>runAction(item.pinned?"Memory unpinned.":"Memory pinned.",()=>invoke("pin",{id:item.id,pinned:!item.pinned}))),
         actionButton("Archive",()=>{if(window.confirm("Archive this memory?"))return runAction("Memory archived.",()=>invoke("archive",{id:item.id}));}),
         actionButton("Link",async()=>{const other=window.prompt("Enter the ID of the other memory to link to");if(!other)return;const relation=window.prompt("How are these memories related?","related_to");if(!relation)return;await runAction("Memories linked.",()=>invoke("link",{from_memory_id:item.id,to_memory_id:other.trim(),relation}));}),
-        actionButton("Links",async()=>{try{const result=await invoke("links",{id:item.id});const lines=(result.links||[]).map(l=>l.relation+" · "+l.from_memory_id+" → "+l.to_memory_id);addMessage(lines.join("\n")||"No links for this memory.", "bot");}catch(error){addNote(error.message);}}),
+        actionButton("Links",async()=>{try{const result=await invoke("links",{id:item.id});const links=result.links||[];const panel=addMessage("MEMORY CONNECTIONS", "bot");panel.classList.add("memory-manager");if(!links.length){panel.appendChild(document.createTextNode("No links for this memory."));return;}links.forEach(link=>{const line=document.createElement("div");line.className="memory-row";const label=document.createElement("span");label.textContent=link.relation+" · "+link.from_memory_id+" → "+link.to_memory_id;const remove=makeButton("Unlink",()=>runAction("Memory link removed.",()=>invoke("unlink",{id:link.id})));line.append(label,remove);panel.appendChild(line);});}catch(error){addNote(error.message);}}),
         actionButton("Delete",()=>{if(window.confirm("Permanently delete this memory?"))return runAction("Memory deleted.",()=>invoke("delete",{id:item.id,confirm_delete:true}));})
       );
       if(item.status==="conflict") actions.append(actionButton("Resolve",async()=>{const other=window.prompt("ID of the memory this one supersedes");if(!other)return;await runAction("Conflict resolved.",()=>invoke("resolve",{id:item.id,superseded_id:other.trim()}));}));
