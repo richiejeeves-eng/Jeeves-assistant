@@ -286,9 +286,17 @@ Return a concise assessment with: reflection, relevant principles, ethical consi
 
     console.log("calling Jeeves Council: Mind, Body and Soul; model:", MODEL);
     const adviserJobs: Promise<string>[] = [];
-    if (activeAdvisers.includes("mind")) adviserJobs.push(askGemini(mindPrompt, adviserContents, false).then((v) => "MIND — independent specialist assessment:\\n" + v));
-    if (activeAdvisers.includes("body")) adviserJobs.push(askGemini(bodyPrompt, adviserContents, false).then((v) => "BODY — independent specialist assessment:\\n" + v));
-    if (activeAdvisers.includes("soul")) adviserJobs.push(askGemini(soulPrompt, adviserContents, false).then((v) => "SOUL — independent specialist assessment:\\n" + v));
+    const adviserJob = (name: string, prompt: string) =>
+      askGemini(prompt, adviserContents, false)
+        .then((value) => name.toUpperCase() + " — independent specialist assessment:\\n" + value)
+        .catch((error) => {
+          // One adviser outage must not take down the whole council response.
+          console.error(name + " adviser unavailable:", error instanceof Error ? error.message : "unknown error");
+          return name.toUpperCase() + " adviser unavailable for this turn; do not infer or invent its assessment.";
+        });
+    if (activeAdvisers.includes("mind")) adviserJobs.push(adviserJob("mind", mindPrompt));
+    if (activeAdvisers.includes("body")) adviserJobs.push(adviserJob("body", bodyPrompt));
+    if (activeAdvisers.includes("soul")) adviserJobs.push(adviserJob("soul", soulPrompt));
     const adviserAssessments = await Promise.all(adviserJobs);
     const councilAdvice = adviserAssessments.length ? adviserAssessments.join("\\n\\n") : "No specialist advisers were selected. Respond using your own broad general knowledge as Jeeves.";
 
