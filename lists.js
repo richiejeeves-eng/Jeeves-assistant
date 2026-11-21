@@ -91,8 +91,21 @@ async function showMemories() {
         actionButton("Edit",async()=>{const text=window.prompt("Edit memory",item.content);if(text===null||!text.trim())return;await runAction("Memory updated.",()=>invoke("update",{id:item.id,content:text.trim(),memory_type:item.memory_type,importance:item.importance,sensitive:item.sensitive}));}),
         actionButton(item.sensitive?"Mark non-sensitive":"Mark sensitive",()=>{if(item.sensitive&&!window.confirm("Confirm this memory contains no health, financial, relationship, identity or other private information. Allow it to be used in Gemini context?"))return;return runAction(item.sensitive?"Memory marked non-sensitive.":"Memory protected.",()=>invoke("update",{id:item.id,content:item.content,memory_type:item.memory_type,importance:item.importance,sensitive:!item.sensitive}));}),
         actionButton(item.pinned?"Unpin":"Pin",()=>runAction(item.pinned?"Memory unpinned.":"Memory pinned.",()=>invoke("pin",{id:item.id,pinned:!item.pinned}))),
-        actionButton("Archive",()=>{if(window.confirm("Archive this memory?"))return runAction("Memory archived.",()=>invoke("archive",{id:item.id}));}),
-        actionButton("Link",async()=>{const other=window.prompt("Enter the ID of the other memory to link to");if(!other)return;const relation=window.prompt("How are these memories related?","related_to");if(!relation)return;await runAction("Memories linked.",()=>invoke("link",{from_memory_id:item.id,to_memory_id:other.trim(),relation}));}),
+        item.status==="archived"
+          ? actionButton("Restore",()=>runAction("Memory restored.",()=>invoke("restore",{id:item.id})))
+          : actionButton("Archive",()=>{if(window.confirm("Archive this memory?"))return runAction("Memory archived.",()=>invoke("archive",{id:item.id}));}),
+        actionButton("Link",async()=>{
+          const choices=items.filter(m=>m.id!==item.id&&m.status==="active");
+          if(!choices.length){addNote("Add another active memory before creating a link.");return;}
+          const menu=choices.map((m,i)=>(i+1)+". "+String(m.content||"").slice(0,100)).join("\n");
+          const selected=window.prompt("Choose the memory number to link:\n"+menu);
+          if(selected===null)return;
+          const index=Number(selected)-1;
+          if(!Number.isInteger(index)||index<0||index>=choices.length){addNote("Invalid memory selection.");return;}
+          const relation=window.prompt("How are these memories related?","related_to");
+          if(!relation||!relation.trim())return;
+          await runAction("Memories linked.",()=>invoke("link",{from_memory_id:item.id,to_memory_id:choices[index].id,relation:relation.trim()}));
+        }),
         actionButton("Links",async()=>{try{const result=await invoke("links",{id:item.id});const links=result.links||[];const panel=addMessage("MEMORY CONNECTIONS", "bot");panel.classList.add("memory-manager");if(!links.length){panel.appendChild(document.createTextNode("No links for this memory."));return;}links.forEach(link=>{const line=document.createElement("div");line.className="memory-row";const label=document.createElement("span");label.textContent=link.relation+" · "+link.from_memory_id+" → "+link.to_memory_id;const remove=makeButton("Unlink",()=>runAction("Memory link removed.",()=>invoke("unlink",{id:link.id})));line.append(label,remove);panel.appendChild(line);});}catch(error){addNote(error.message);}}),
         actionButton("Delete",()=>{if(window.confirm("Permanently delete this memory?"))return runAction("Memory deleted.",()=>invoke("delete",{id:item.id,confirm_delete:true}));})
       );
