@@ -31,6 +31,8 @@ ALTER TABLE public.memories
 
 CREATE INDEX IF NOT EXISTS memories_owner_status_created_idx
   ON public.memories (user_id, status, created_at DESC);
+CREATE INDEX IF NOT EXISTS memories_content_fts_idx
+  ON public.memories USING gin (pg_catalog.to_tsvector('english'::pg_catalog.regconfig, content));
 CREATE INDEX IF NOT EXISTS memories_owner_type_idx
   ON public.memories (user_id, memory_type, status);
 CREATE INDEX IF NOT EXISTS memories_owner_expiry_idx
