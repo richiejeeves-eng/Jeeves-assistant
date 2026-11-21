@@ -10,185 +10,81 @@ function invalidateListCache(key) { if (window.jeevesListCache) delete window.je
 
 async function showMemories() {
   if (!(await requireSession())) return;
+  const invoke = async (action, payload = {}) => {
+    const { data, error } = await db.functions.invoke("jeeves-brain2", { body: { action, ...payload } });
+    if (error) throw new Error(data?.error || error.message || "Memory service unavailable");
+    if (data?.error) throw new Error(data.error);
+    return data;
+  };
+  let items = [];
+  try { const result = await invoke("list", { limit: 100 }); items = result.items || []; }
+  catch (error) { addMessage("Brain 2: " + error.message, "bot"); return; }
 
-  const { data, error } = await getListRows("memories", () => db
-    .from("memories")
-    .select("id, content, category, created_at")
-    .order("created_at", { ascending: false })
-    .limit(100));
-
-  if (error) {
-    addMessage("Memory error: " + error.message, "bot");
-    return;
-  }
-
-  const box = addMessage("JEEVES MEMORY MANAGER", "bot");
+  const box = addMessage("JEEVES BRAIN 2 · MEMORY & KNOWLEDGE", "bot");
   box.classList.add("memory-manager");
-
   const intro = document.createElement("p");
-  intro.textContent = "Review and maintain what JEEVES remembers. Changes apply to future conversations.";
+  intro.textContent = "Your long-term knowledge base. Search, classify, connect and maintain memories. Unreviewed memories are treated as sensitive by default.";
   box.appendChild(intro);
 
   const toolbar = document.createElement("div");
   toolbar.className = "memory-toolbar";
-
   const search = document.createElement("input");
-  search.type = "search";
-  search.placeholder = "Search memories...";
-  search.setAttribute("aria-label", "Search memories");
-
-  const category = document.createElement("select");
-  category.setAttribute("aria-label", "Filter memories by category");
-  const allOption = document.createElement("option");
-  allOption.value = "";
-  allOption.textContent = "All categories";
-  category.appendChild(allOption);
-
-  const categories = Array.from(new Set((data || []).map(function (item) {
-    return item.category || "uncategorised";
-  }))).sort();
-  categories.forEach(function (name) {
-    const option = document.createElement("option");
-    option.value = name;
-    option.textContent = name;
-    category.appendChild(option);
+  search.type = "search"; search.placeholder = "Search saved knowledge…"; search.setAttribute("aria-label","Search saved knowledge");
+  const filter = document.createElement("select");
+  filter.setAttribute("aria-label","Filter memory status");
+  [["","All statuses"],["active","Active"],["archived","Archived"],["conflict","Conflicts"]].forEach(([v,t])=>{const o=document.createElement("option");o.value=v;o.textContent=t;filter.appendChild(o);});
+  const typeFilter = document.createElement("select");
+  typeFilter.setAttribute("aria-label","Filter memory type");
+  [["","All types"],["fact","Fact"],["preference","Preference"],["event","Event"],["goal","Goal"],["person","Person"],["habit","Habit"],["task","Task"],["reflection","Reflection"]].forEach(([v,t])=>{const o=document.createElement("option");o.value=v;o.textContent=t;typeFilter.appendChild(o);});
+  const add = makeButton("+ Remember", async () => {
+    const content=window.prompt("What should Jeeves remember?");
+    if(!content||!content.trim()) return;
+    const memory_type=(window.prompt("Type: fact, preference, event, goal, person, habit, task or reflection","fact")||"fact").trim().toLowerCase();
+    if(!["fact","preference","event","goal","person","habit","task","reflection"].includes(memory_type)){addNote("Unknown memory type. Nothing saved.");return;}
+    const importance=Number(window.prompt("Importance from 1 (low) to 5 (critical)","3")||"3");
+    const sensitive=window.confirm("Treat this memory as sensitive? Choose OK to protect it; Cancel only if it is clearly non-sensitive.");
+    try { await invoke("remember",{content:content.trim(),memory_type,importance:Number.isFinite(importance)?importance:3,sensitive}); addNote("Memory saved."); await refresh(); }
+    catch(error){addNote("Could not save memory: "+error.message);}
   });
+  const refreshButton=makeButton("Refresh",refresh);
+  toolbar.append(search,filter,typeFilter,add,refreshButton); box.appendChild(toolbar);
+  const count=document.createElement("p");count.className="memory-count";box.appendChild(count);
+  const list=document.createElement("div");list.className="memory-list";box.appendChild(list);
 
-  const addButton = makeButton("+ Add memory", async function () {
-    const content = window.prompt("What should JEEVES remember?");
-    if (!content || !content.trim()) return;
-    const cleanContent = content.trim().slice(0, 2000);
-    const categoryName = (window.prompt("Category (for example: preferences, goals, projects, personal)", "personal") || "personal").trim().slice(0, 60) || "personal";
-    const { error: insertError } = await db.from("memories").insert({
-      content: cleanContent,
-      category: categoryName
-    });
-    if (insertError) {
-      addNote("Could not add memory: " + insertError.message);
-      return;
-    }
-    invalidateListCache("memories");
-    addNote("Memory added.");
-    await showMemories();
-  });
-
-  const clearButton = makeButton("Clear all", async function () {
-    if (!(data || []).length) return;
-    if (!window.confirm("Permanently delete ALL saved memories? This cannot be undone.")) return;
-    const { error: clearError } = await db.from("memories").delete().not("id", "is", null);
-    if (clearError) {
-      addNote("Could not clear memories: " + clearError.message);
-      return;
-    }
-    invalidateListCache("memories");
-    data.splice(0, data.length);
-    addNote("All saved memories deleted.");
-    render();
-  });
-  clearButton.classList.add("memory-clear-all");
-
-  toolbar.append(search, category, addButton, clearButton);
-  box.appendChild(toolbar);
-
-  const count = document.createElement("p");
-  count.className = "memory-count";
-  box.appendChild(count);
-
-  const list = document.createElement("div");
-  list.className = "memory-list";
-  box.appendChild(list);
-
-  function render() {
-    list.textContent = "";
-    const term = search.value.trim().toLowerCase();
-    const selectedCategory = category.value;
-    const filtered = (data || []).filter(function (item) {
-      const itemCategory = item.category || "uncategorised";
-      return (!selectedCategory || itemCategory === selectedCategory) &&
-        (!term || item.content.toLowerCase().includes(term) || itemCategory.toLowerCase().includes(term));
-    });
-
-    count.textContent = filtered.length + " of " + (data || []).length + " memories shown" +
-      ((data || []).length === 100 ? " (latest 100 loaded)" : "");
-
-    if (filtered.length === 0) {
-      const empty = document.createElement("p");
-      empty.textContent = data.length ? "No memories match this filter." : "No memories saved yet. Add one to get started.";
-      list.appendChild(empty);
-      return;
-    }
-
-    filtered.forEach(function (item) {
-      const row = document.createElement("article");
-      row.className = "memory-row";
-
-      const details = document.createElement("div");
-      details.className = "memory-details";
-
-      const tag = document.createElement("small");
-      tag.className = "memory-category";
-      tag.textContent = item.category || "uncategorised";
-
-      const content = document.createElement("p");
-      content.textContent = item.content;
-
-      const date = document.createElement("small");
-      date.className = "memory-date";
-      date.textContent = item.created_at ? new Date(item.created_at).toLocaleDateString() : "";
-
-      details.append(tag, content, date);
-
-      const actions = document.createElement("div");
-      actions.className = "memory-actions";
-
-      const editButton = makeButton("Edit", async function () {
-        const revised = window.prompt("Edit this memory:", item.content);
-        if (revised === null || !revised.trim()) return;
-        const revisedCategory = window.prompt("Edit category:", item.category || "personal");
-        if (revisedCategory === null) return;
-
-        const { error: updateError } = await db.from("memories")
-          .update({
-            content: revised.trim().slice(0, 2000),
-            category: revisedCategory.trim().slice(0, 60) || "personal"
-          })
-          .eq("id", item.id);
-
-        if (updateError) {
-          addNote("Could not update memory: " + updateError.message);
-          return;
-        }
-        invalidateListCache("memories");
-        item.content = revised.trim().slice(0, 2000);
-        item.category = revisedCategory.trim().slice(0, 60) || "personal";
-        addNote("Memory updated.");
-        render();
-      });
-
-      const deleteButton = makeButton("Delete", async function () {
-        if (!window.confirm("Permanently delete this memory?")) return;
-        const { error: deleteError } = await db.from("memories").delete().eq("id", item.id);
-        if (deleteError) {
-          addNote("Could not delete memory: " + deleteError.message);
-          return;
-        }
-        invalidateListCache("memories");
-        const index = data.findIndex(function (memory) { return memory.id === item.id; });
-        if (index !== -1) data.splice(index, 1);
-        addNote("Memory deleted.");
-        render();
-      });
-
-      actions.append(editButton, deleteButton);
-      row.append(details, actions);
-      list.appendChild(row);
+  async function refresh(){
+    try { const result=await invoke("list",{limit:100});items=result.items||[];render(); }
+    catch(error){addNote("Could not refresh memories: "+error.message);}
+  }
+  function actionButton(label,fn){const b=makeButton(label,fn);return b;}
+  async function runAction(label,fn){try{await fn();addNote(label);await refresh();}catch(error){addNote("Action failed: "+error.message);}}
+  function render(){
+    list.textContent="";
+    const term=search.value.trim().toLowerCase();
+    const visible=items.filter(m=>(!filter.value||m.status===filter.value)&&(!typeFilter.value||m.memory_type===typeFilter.value)&&(!term||String(m.content||"").toLowerCase().includes(term)||String(m.memory_type||"").includes(term)));
+    count.textContent=visible.length+" shown · "+items.length+" loaded · "+items.filter(m=>m.pinned).length+" pinned";
+    if(!visible.length){const empty=document.createElement("p");empty.textContent="No matching memories. Use Remember to add durable knowledge.";list.appendChild(empty);return;}
+    visible.forEach(item=>{
+      const row=document.createElement("article");row.className="memory-row";
+      const details=document.createElement("div");details.className="memory-details";
+      const tag=document.createElement("small");tag.className="memory-category";tag.textContent=(item.memory_type||item.category||"fact")+" · "+(item.status||"active")+(item.sensitive?" · sensitive":"");
+      const content=document.createElement("p");content.textContent=item.content;
+      const meta=document.createElement("small");meta.className="memory-date";meta.textContent="Importance "+item.importance+" / 5 · "+(item.created_at?new Date(item.created_at).toLocaleDateString():"")+(item.pinned?" · pinned":"");
+      details.append(tag,content,meta);
+      const actions=document.createElement("div");actions.className="memory-actions";
+      actions.append(
+        actionButton("Edit",async()=>{const text=window.prompt("Edit memory",item.content);if(text===null||!text.trim())return;await runAction("Memory updated.",()=>invoke("update",{id:item.id,content:text.trim(),memory_type:item.memory_type,importance:item.importance,sensitive:item.sensitive}));}),
+        actionButton(item.pinned?"Unpin":"Pin",()=>runAction(item.pinned?"Memory unpinned.":"Memory pinned.",()=>invoke("pin",{id:item.id,pinned:!item.pinned}))),
+        actionButton("Archive",()=>{if(window.confirm("Archive this memory?"))return runAction("Memory archived.",()=>invoke("archive",{id:item.id}));}),
+        actionButton("Link",async()=>{const other=window.prompt("Enter the ID of the other memory to link to");if(!other)return;const relation=window.prompt("How are these memories related?","related_to");if(!relation)return;await runAction("Memories linked.",()=>invoke("link",{from_memory_id:item.id,to_memory_id:other.trim(),relation}));}),
+        actionButton("Links",async()=>{try{const result=await invoke("links",{id:item.id});const lines=(result.links||[]).map(l=>l.relation+" · "+l.from_memory_id+" → "+l.to_memory_id);addMessage(lines.join("\n")||"No links for this memory.", "bot");}catch(error){addNote(error.message);}}),
+        actionButton("Delete",()=>{if(window.confirm("Permanently delete this memory?"))return runAction("Memory deleted.",()=>invoke("delete",{id:item.id,confirm_delete:true}));})
+      );
+      if(item.status==="conflict") actions.append(actionButton("Resolve",async()=>{const other=window.prompt("ID of the memory this one supersedes");if(!other)return;await runAction("Conflict resolved.",()=>invoke("resolve",{id:item.id,superseded_id:other.trim()}));}));
+      row.append(details,actions);list.appendChild(row);
     });
   }
-
-  search.addEventListener("input", render);
-  category.addEventListener("change", render);
-  render();
-  scrollChat();
+  search.addEventListener("input",render);filter.addEventListener("change",render);typeFilter.addEventListener("change",render);
+  render();scrollChat();
 }
 
 async function showTasks(filter = "open") {
