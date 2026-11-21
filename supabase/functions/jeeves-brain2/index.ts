@@ -64,7 +64,7 @@ Deno.serve(async (req) => {
       if(error) throw error;
       return json({saved:true,item:data},201,origin);
     }
-    if(action==="update"||action==="pin"||action==="archive"||action==="delete"||action==="resolve"){
+    if(action==="update"||action==="pin"||action==="archive"||action==="restore"||action==="delete"||action==="resolve"){
       const id=typeof body.id==="string"?body.id:"";
       if(!uuid.test(id)) return json({error:"Valid memory id required"},400,origin);
       if(action==="delete"&&body.confirm_delete!==true) return json({error:"Explicit confirmation required"},403,origin);
@@ -88,6 +88,11 @@ Deno.serve(async (req) => {
       if(action==="archive"){
         const {data,error}=await supabase.from("memories").update({status:"archived"}).eq("id",id).eq("user_id",user.id).select("id,status").maybeSingle();
         if(error) throw error; if(!data) return json({error:"Memory not found"},404,origin);
+        return json({updated:true,item:data},200,origin);
+      }
+      if(action==="restore"){
+        const {data,error}=await supabase.from("memories").update({status:"active",superseded_by:null}).eq("id",id).eq("user_id",user.id).eq("status","archived").select("id,status").maybeSingle();
+        if(error) throw error; if(!data) return json({error:"Archived memory not found"},404,origin);
         return json({updated:true,item:data},200,origin);
       }
       if(action==="resolve"){
