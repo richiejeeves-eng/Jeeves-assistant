@@ -58,3 +58,14 @@ Brain 1 remains the reasoning and response engine. Brain 2 is the long-term know
 8. Only then enable automatic capture for normal use.
 
 No billing, paid APIs or external embedding service is required for this initial release.
+
+
+## Brain 1 capability duplication (staged, not connected)
+
+To avoid losing existing capabilities during the transition, Brain 1's complete conversation Edge Function has been copied into `supabase/functions/jeeves-brain2-chat/index.ts`. The original `supabase/functions/jarvis-brain/index.ts` remains unchanged.
+
+The duplicate carries forward the existing Gemini request/response flow, Mind/Body/Soul council prompts, conversation history handling, image input, memory retrieval and automatic candidate capture, task creation, health-record context, user-approved feedback/preferences, and response-speaker selection. It continues to use the existing authenticated user-scoped Supabase client and existing tables/RPCs; no new live connection or data copy has been made.
+
+The Brain 2 memory-management API remains in `supabase/functions/jeeves-brain2/index.ts`. These two Brain 2 functions are staged as separate responsibilities: conversation/council processing and canonical memory management. The frontend still calls Brain 1 for chat and the existing Brain 2 API only where its current code directs it. No deployment, migration, merge, live database write, or production switch is performed by this duplication.
+
+**Transition rule:** keep Brain 1 intact until Brain 2 is deployed with approval, connected, and verified end-to-end (chat, council, retrieval, capture, tasks, health context, feedback, voice playback, and error handling). Only then consider removing duplicated Brain 1 code.
