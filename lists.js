@@ -88,8 +88,8 @@ async function showMemories() {
       details.append(tag,content,meta);
       const actions=document.createElement("div");actions.className="memory-actions";
       actions.append(
-        actionButton("Edit",async()=>{const text=window.prompt("Edit memory",item.content);if(text===null||!text.trim())return;await runAction("Memory updated.",()=>invoke("update",{id:item.id,content:text.trim(),memory_type:item.memory_type,importance:item.importance,sensitive:item.sensitive}));}),
-        actionButton(item.sensitive?"Mark non-sensitive":"Mark sensitive",()=>{if(item.sensitive&&!window.confirm("Confirm this memory contains no health, financial, relationship, identity or other private information. Allow it to be used in Gemini context?"))return;return runAction(item.sensitive?"Memory marked non-sensitive.":"Memory protected.",()=>invoke("update",{id:item.id,content:item.content,memory_type:item.memory_type,importance:item.importance,sensitive:!item.sensitive}));}),
+        actionButton("Edit",async()=>{const text=window.prompt("Edit memory",item.content);if(text===null||!text.trim())return;await runAction("Memory updated.",()=>invoke("update",{id:item.id,content:text.trim(),memory_type:item.memory_type,importance:item.importance}));}),
+        actionButton(item.sensitive?"Mark non-sensitive":"Mark sensitive",()=>{if(item.sensitive&&!window.confirm("Confirm this memory contains no health, financial, relationship, identity or other private information. Allow it to be used in Gemini context?"))return;return runAction(item.sensitive?"Memory marked non-sensitive.":"Memory protected.",()=>invoke("sensitivity",{id:item.id,sensitive:!item.sensitive,confirm_review:item.sensitive===true}));}),
         actionButton(item.pinned?"Unpin":"Pin",()=>runAction(item.pinned?"Memory unpinned.":"Memory pinned.",()=>invoke("pin",{id:item.id,pinned:!item.pinned}))),
         item.status==="archived"
           ? actionButton("Restore",()=>runAction("Memory restored.",()=>invoke("restore",{id:item.id})))
