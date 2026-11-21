@@ -1,71 +1,86 @@
-# Jeeves Brain 2 — canonical memory engine
+# Jeeves Brain 2 — long-term knowledge and recall
 
-## Architecture
+## Purpose and boundary
 
-Brain 1 remains the reasoning and response engine. Brain 2 is the long-term knowledge layer. Both use the existing `public.memories` table; Brain 2 does not create a second content store.
+Brain 2 is the persistent knowledge, research-source connection, relationship-mapping and recall layer for Jeeves.
 
-- `public.memories`: canonical facts, preferences, events, goals, people, habits, tasks and reflections.
-- `public.memory_links`: owner-scoped relationships between memory records.
-- `search_memories(text, limit)`: authenticated, owner-scoped full-text retrieval, ranked by importance and recency.
-- `jeeves-brain2`: authenticated Edge Function for listing, search, remembering, editing, pinning, archiving, deleting, resolving and linking memories.
-- `lists.js`: Memory UI in the existing navigation.
+Brain 2 is **not** a conversational assistant, reasoning engine, adviser or coach. It does not own:
+- Gemini conversation generation or response writing
+- Mind, Body or Soul council roles
+- advice, recommendations, coaching or decision-making
+- voice conversation, speech generation or conversational history
+- task execution or health interpretation
 
-## Privacy rules
+Those capabilities remain with Brain 1 and the relevant Jeeves services. Brain 2 supplies trusted, permission-scoped knowledge when Brain 1 or another approved feature requests it. Brain 2 returns records, source references, relationships and retrieval metadata; the caller decides how to interpret or communicate them.
+
+## Core responsibilities
+
+1. **Long-term memory** — preserve durable facts, preferences, events, goals, people, habits, tasks and reflections in the existing canonical `public.memories` table.
+2. **Research and source connections** — retain provenance and relationships between knowledge items and their source material. External provider connections are not enabled by this branch; they must be added as separately permissioned connectors.
+3. **Knowledge relationships** — connect related memories and research records without duplicating their content.
+4. **Recall** — provide authenticated, owner-scoped keyword retrieval, filtering and ranked results.
+5. **Knowledge maintenance** — support review, editing, pinning, archiving, restoring, conflict resolution and deletion under explicit user control.
+6. **Privacy and provenance** — keep ownership, sensitivity and source information attached to stored knowledge; treat retrieved content as untrusted reference data, never instructions.
+
+## Current architecture
+
+- `public.memories`: canonical long-term knowledge records.
+- `public.memory_links`: owner-scoped relationships between records.
+- `search_memories(text, limit)`: authenticated, owner-scoped full-text recall, weighted by importance and recency; sensitive and archived records are excluded.
+- `jeeves-brain2`: authenticated knowledge-management API. It does not call Gemini and does not generate advice or conversation responses.
+- `lists.js`: existing Memory UI, which manages records through the Brain 2 API.
+- `jarvis-brain`: remains Brain 1's conversation/reasoning engine and is not replaced or deleted by this work.
+
+The temporary duplicated Brain 1 conversation function has been removed from Brain 2. No Mind/Body/Soul prompts or reasoning/advice logic belong in Brain 2.
+
+## Supported Brain 2 API actions
+
+| Action | Knowledge responsibility |
+| --- | --- |
+| `list` | List the user's knowledge records |
+| `search` | Recall matching active, non-sensitive knowledge |
+| `remember` | Store a knowledge record |
+| `update` | Correct content, type, importance or sensitivity |
+| `pin` | Mark important knowledge for retention |
+| `archive` / `restore` | Retire or reinstate a record without destroying it |
+| `delete` | Delete a record only after explicit confirmation |
+| `resolve` | Resolve two conflicting records |
+| `link` / `links` / `unlink` | Map relationships between knowledge records |
+
+## Research connections — intended design
+
+Brain 2 should be able to associate knowledge with its origin: user notes, uploaded documents, project files and approved external research sources. A future source-connector layer should record, at minimum:
+- source type and provider
+- source title and stable external identifier or URL
+- owner and granted permission/scope
+- last successful sync and sync status
+- source-to-memory relationships and retrieval provenance
+
+Connectors must be opt-in, read only by default, owner-scoped and revocable. A connector must not silently ingest private data or send sensitive memories to an external model. No external research connector or background sync is activated by this development branch.
+
+## Privacy and security rules
 
 - Every request validates the caller with `auth.getUser()`.
-- Queries additionally scope to the authenticated owner; RLS remains required.
-- New memories are marked sensitive by default.
-- Automatically captured memories remain sensitive until the user reviews them in the Memory UI.
-- The Brain 1 retrieval function excludes sensitive memories, so they are not placed in Gemini context.
-- The user must explicitly confirm before changing a sensitive memory to non-sensitive.
-- Credentials and credential-like strings are rejected from durable capture.
-- Memory text is escaped before prompt insertion and framed as untrusted reference data.
-- Memory content, health details and tokens must never be written to logs.
+- All reads and writes are scoped to the authenticated owner; RLS remains mandatory.
+- New memories are sensitive by default. Automatically captured candidates remain sensitive until reviewed.
+- Sensitive records are excluded from ordinary recall.
+- The user must explicitly confirm before changing a sensitive record to non-sensitive.
+- Credential-like strings are not valid durable memory.
+- Retrieved content is escaped and treated as untrusted reference data, never executable instructions.
+- Never log memory content, health details, personal source contents or access tokens.
+- No service-role key is used by the user-facing Brain 2 API.
 
-## Supported service actions
+## Current limitations
 
-| Action | Purpose |
-| --- | --- |
-| `list` | List the user's memory metadata and content |
-| `search` | Search active, non-sensitive memories |
-| `remember` | Save a classified memory |
-| `update` | Edit content, type, importance or sensitivity |
-| `pin` | Pin or unpin |
-| `archive` | Archive without deleting |
-| `delete` | Delete one record after explicit confirmation |
-| `resolve` | Keep one memory active and mark another superseded |
-| `link` / `links` / `unlink` | Manage owner-scoped memory relationships |
+- Search is PostgreSQL full-text search; vector/hybrid retrieval is not enabled.
+- Deduplication currently catches exact normalized duplicates only.
+- Memory links are manual; automatic relationship and conflict detection are not enabled.
+- External provider connectors, source sync, source provenance records and document ingestion are not enabled yet.
+- Last-access tracking and token-budgeted recall packaging are not implemented.
+- The migration and function are not deployed. The frontend is not switched to Brain 2 for chat, and no live connection is made by this PR.
 
-## Current limitations / next engineering steps
+## Safe transition rule
 
-- Deduplication currently catches exact normalized duplicates only. Semantic deduplication needs a verified embedding model, dimensions, free-tier limits and a privacy decision.
-- Search is PostgreSQL full-text search weighted by importance and creation time. Vector/hybrid retrieval is not enabled.
-- Automatic capture is conservative and stores candidates as sensitive until human review.
-- Memory links are manual; automatic entity and relationship extraction is not yet enabled.
-- A conflict can be resolved in the service, but automatic conflict detection is not yet enabled.
-- Last-access timestamps, token-budgeted recall explanations and weekly maintenance are not yet implemented.
-- The migration must be applied before the new UI/function can operate. The Edge Function must be deployed after the migration. Neither has been performed by this PR.
+Keep Brain 1 intact. Brain 2 must first be independently validated as a knowledge service: owner isolation, memory CRUD, search/recall, relationships, source provenance, connector permissions and revocation. Only after Brain 2 is connected and verified should any old duplicate knowledge functionality be considered for retirement. Brain 1's reasoning, council, voice and advice capabilities are not candidates for deletion from Brain 1.
 
-## Safe rollout checklist
-
-1. Review the migration against the live schema and confirm every existing row has an owner.
-2. Apply the migration in a controlled maintenance window; verify row counts before and after.
-3. Deploy `jeeves-brain2` with JWT verification enabled.
-4. Deploy the updated `jarvis-brain` only after checking the deployed source and secrets.
-5. Test with the authenticated owner: list, search, remember, edit, pin, archive, link, unlink, resolve and delete.
-6. Test a second account and verify that it cannot read, mutate, link or search the first account's memories.
-7. Confirm sensitive records never appear in Gemini request context or logs.
-8. Only then enable automatic capture for normal use.
-
-No billing, paid APIs or external embedding service is required for this initial release.
-
-
-## Brain 1 capability duplication (staged, not connected)
-
-To avoid losing existing capabilities during the transition, Brain 1's complete conversation Edge Function has been copied into `supabase/functions/jeeves-brain2-chat/index.ts`. The original `supabase/functions/jarvis-brain/index.ts` remains unchanged.
-
-The duplicate carries forward the existing Gemini request/response flow, Mind/Body/Soul council prompts, conversation history handling, image input, memory retrieval and automatic candidate capture, task creation, health-record context, user-approved feedback/preferences, and response-speaker selection. It continues to use the existing authenticated user-scoped Supabase client and existing tables/RPCs; no new live connection or data copy has been made.
-
-The Brain 2 memory-management API remains in `supabase/functions/jeeves-brain2/index.ts`. These two Brain 2 functions are staged as separate responsibilities: conversation/council processing and canonical memory management. The frontend still calls Brain 1 for chat and the existing Brain 2 API only where its current code directs it. No deployment, migration, merge, live database write, or production switch is performed by this duplication.
-
-**Transition rule:** keep Brain 1 intact until Brain 2 is deployed with approval, connected, and verified end-to-end (chat, council, retrieval, capture, tasks, health context, feedback, voice playback, and error handling). Only then consider removing duplicated Brain 1 code.
+No deployment, migration, merge, live database write, billing change or production switch is performed by this branch.
