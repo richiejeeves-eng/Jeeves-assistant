@@ -17,6 +17,13 @@ UPDATE public.memories SET sensitive = true WHERE sensitive IS DISTINCT FROM tru
 ALTER TABLE public.memories
   ALTER COLUMN user_id SET NOT NULL;
 
+-- Keep the database limit aligned with the Brain 2 API's 6,000-character validation.
+ALTER TABLE public.memories
+  DROP CONSTRAINT IF EXISTS memories_content_len;
+ALTER TABLE public.memories
+  ADD CONSTRAINT memories_content_len
+    CHECK (char_length(content) BETWEEN 1 AND 6000);
+
 ALTER TABLE public.memories
   ADD CONSTRAINT memories_memory_type_check
     CHECK (memory_type IN ('fact','preference','event','goal','person','habit','task','reflection')),
