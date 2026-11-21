@@ -73,6 +73,8 @@ AS $function$
     m.created_at DESC
   LIMIT greatest(1, least(coalesce(max_results, 10), 20));
 $function$;
+REVOKE ALL ON FUNCTION public.search_memories(text, integer) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.search_memories(text, integer) TO authenticated;
 
 -- Composite ownership references require a matching unique key.
 CREATE UNIQUE INDEX IF NOT EXISTS memories_id_user_id_uidx
