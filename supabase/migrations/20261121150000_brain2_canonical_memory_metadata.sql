@@ -63,6 +63,7 @@ AS $function$
   CROSS JOIN query AS q
   WHERE m.user_id = (SELECT auth.uid())
     AND m.status = 'active'
+    AND m.sensitive = false
     AND q.terms @@ pg_catalog.to_tsvector('english'::pg_catalog.regconfig, m.content)
   ORDER BY
     pg_catalog.ts_rank_cd(
