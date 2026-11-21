@@ -87,7 +87,6 @@ Deno.serve(async (req) => {
         const patch:Record<string,unknown>={content};
         if(typeof body.memory_type==="string"&&types.has(body.memory_type)) {patch.memory_type=body.memory_type;patch.category=body.memory_type;}
         if(Number.isInteger(body.importance)) patch.importance=Math.max(1,Math.min(Number(body.importance),5));
-        if(typeof body.sensitive==="boolean") patch.sensitive=body.sensitive;
         const {data,error}=await supabase.from("memories").update(patch).eq("id",id).eq("user_id",user.id).select("id,content,memory_type,importance,sensitive,status").maybeSingle();
         if(error) throw error; if(!data) return json({error:"Memory not found"},404,origin);
         return json({updated:true,item:data},200,origin);
@@ -111,10 +110,14 @@ Deno.serve(async (req) => {
       if(action==="resolve"){
         const other=typeof body.superseded_id==="string"?body.superseded_id:"";
         if(!uuid.test(other)||other===id) return json({error:"A different valid superseded_id is required"},400,origin);
-        const {data:chosen,error:e1}=await supabase.from("memories").update({status:"active",superseded_by:null}).eq("id",id).eq("user_id",user.id).select("id").maybeSingle();
-        if(e1) throw e1; if(!chosen) return json({error:"Chosen memory not found"},404,origin);
-        const {data:old,error:e2}=await supabase.from("memories").update({status:"archived",superseded_by:id}).eq("id",other).eq("user_id",user.id).select("id").maybeSingle();
-        if(e2) throw e2; if(!old) return json({error:"Other memory not found for this account"},404,origin);
+        const {data,error}=await supabase.rpc("resolve_memory_conflict",{
+          p_chosen_memory_id:id,p_superseded_memory_id:other
+        });
+        if(error) {
+          if(error.message?.includes("not found")) return json({error:"Both memories must belong to your account."},404,origin);
+          throw error;
+        }
+        if(data!==true) return json({error:"Conflict could not be resolved"},409,origin);
         return json({resolved:true},200,origin);
       }
       const {data,error}=await supabase.from("memories").delete().eq("id",id).eq("user_id",user.id).select("id").maybeSingle();
