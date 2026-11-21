@@ -64,6 +64,19 @@ Deno.serve(async (req) => {
       if(error) throw error;
       return json({saved:true,item:data},201,origin);
     }
+    if(action==="sensitivity"){
+      const id=typeof body.id==="string"?body.id:"";
+      if(!uuid.test(id)||typeof body.sensitive!=="boolean") return json({error:"Valid memory ID and sensitivity value required"},400,origin);
+      const {data,error}=await supabase.rpc("set_memory_sensitivity",{
+        p_memory_id:id,p_sensitive:body.sensitive,p_confirm_review:body.confirm_review===true
+      });
+      if(error) {
+        if(error.message?.includes("Explicit review confirmation")) return json({error:"Explicit review confirmation is required before sharing this memory with Brain 1."},403,origin);
+        throw error;
+      }
+      if(data!==true) return json({error:"Memory not found"},404,origin);
+      return json({updated:true,sensitive:body.sensitive},200,origin);
+    }
     if(action==="update"||action==="pin"||action==="archive"||action==="restore"||action==="delete"||action==="resolve"){
       const id=typeof body.id==="string"?body.id:"";
       if(!uuid.test(id)) return json({error:"Valid memory id required"},400,origin);
